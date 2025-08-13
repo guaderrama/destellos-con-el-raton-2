@@ -1,0 +1,559 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lienzo de Partículas Interactivo con Cámara</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            overscroll-behavior: none;
+            background-color: #111827; /* bg-gray-900 */
+        }
+        canvas {
+            display: block;
+            background-color: #000;
+            cursor: crosshair;
+        }
+        .control-panel {
+            background-color: #1f2937; /* bg-gray-800 */
+            transition: transform 0.3s ease-in-out;
+            z-index: 10;
+            flex-shrink: 0; /* Evita que el panel se encoja */
+        }
+        .control-panel.hidden {
+            transform: translateX(-100%);
+        }
+        .slider-label {
+            color: #d1d5db; /* text-gray-300 */
+        }
+        input[type="range"] {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 100%;
+            height: 8px;
+            background: #4b5563; /* bg-gray-600 */
+            border-radius: 5px;
+            outline: none;
+            opacity: 0.7;
+            transition: opacity .2s;
+        }
+        input[type="range"]:hover {
+            opacity: 1;
+        }
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 20px;
+            height: 20px;
+            background: #06b6d4; /* bg-cyan-500 */
+            cursor: pointer;
+            border-radius: 50%;
+        }
+        input[type="range"]::-moz-range-thumb {
+            width: 20px;
+            height: 20px;
+            background: #06b6d4; /* bg-cyan-500 */
+            cursor: pointer;
+            border-radius: 50%;
+        }
+        select {
+            background-color: #4b5563;
+            border-radius: 0.5rem;
+            padding: 0.5rem;
+            color: white;
+        }
+        .divider {
+            border-top: 1px solid #4b5563;
+            margin-top: 1.25rem;
+            margin-bottom: 1.25rem;
+        }
+    </style>
+</head>
+<body class="overflow-hidden h-screen flex">
+
+    <!-- Panel de Control -->
+    <div id="control-panel" class="control-panel w-full md:w-64 p-4 flex flex-col shadow-2xl overflow-y-auto">
+        <h1 class="text-xl font-bold text-cyan-400 mb-4">Control de Partículas</h1>
+        <p id="instructions" class="text-gray-400 mb-6 text-sm">Activa la cámara para empezar a interactuar.</p>
+
+        <div class="space-y-2 mb-6">
+             <button id="camera-btn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition duration-300 shadow-lg">
+                Activar Cámara
+            </button>
+             <div id="status-message" class="mt-2 text-yellow-400 text-xs h-4"></div>
+        </div>
+
+        <div class="space-y-5">
+            <!-- Controles de Generación -->
+            <div>
+                <label for="generationMode" class="slider-label block mb-2 text-sm font-medium">Modo de Generación</label>
+                <select id="generationMode" class="w-full text-sm">
+                    <option value="outline">Contorno (Movimiento)</option>
+                    <option value="fill">Relleno (Silueta)</option>
+                </select>
+            </div>
+            <div id="calibrate-control" style="display: none;">
+                <button id="calibrate-btn" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-2 rounded-lg transition duration-300 text-sm">
+                    Calibrar Fondo
+                </button>
+            </div>
+
+            <!-- Controles de Color -->
+            <div>
+                <label for="colorMode" class="slider-label block mb-2 text-sm font-medium">Modo de Color</label>
+                <select id="colorMode" class="w-full text-sm">
+                    <option value="camera">Color de Cámara</option>
+                    <option value="rainbow">Arcoíris</option>
+                    <option value="thermal">Termal</option>
+                    <option value="neon">Neón</option>
+                    <option value="oceanic">Oceánico</option>
+                    <option value="cycle">Ciclo Automático</option>
+                    <option value="hue">Tono Fijo</option>
+                </select>
+            </div>
+            <div id="hue-control" style="display: none;">
+                <label for="hue" class="slider-label block mb-2 text-sm font-medium">Tono</label>
+                <input id="hue" type="range" min="0" max="360" value="200" class="w-full">
+            </div>
+            
+            <div class="divider"></div>
+
+            <!-- Controles de Físicas y Comportamiento -->
+            <div>
+                <label for="particleShape" class="slider-label block mb-2 text-sm font-medium">Forma de Partícula</label>
+                <select id="particleShape" class="w-full text-sm">
+                    <option value="circle">Círculo</option>
+                    <option value="square">Cuadrado</option>
+                    <option value="triangle">Triángulo</option>
+                    <option value="star">Estrella</option>
+                </select>
+            </div>
+            <div>
+                <label for="physicsMode" class="slider-label block mb-2 text-sm font-medium">Modo de Físicas</label>
+                <select id="physicsMode" class="w-full text-sm">
+                    <option value="normal">Normal</option>
+                    <option value="wind">Viento</option>
+                    <option value="explosion">Explosión</option>
+                </select>
+            </div>
+             <div id="wind-control" style="display: none;">
+                <label for="windForce" class="slider-label block mb-2 text-sm font-medium">Fuerza del Viento</label>
+                <input id="windForce" type="range" min="-0.5" max="0.5" value="0.1" step="0.05" class="w-full">
+            </div>
+            <div>
+                <label for="behaviorMode" class="slider-label block mb-2 text-sm font-medium">Comportamiento</label>
+                <select id="behaviorMode" class="w-full text-sm">
+                    <option value="dynamic">Dinámico</option>
+                    <option value="paint">Pintura</option>
+                </select>
+            </div>
+
+            <div class="divider"></div>
+
+            <!-- Otros Controles -->
+            <div>
+                <label for="sensitivity" class="slider-label block mb-2 text-sm font-medium">Sensibilidad</label>
+                <input id="sensitivity" type="range" min="10" max="100" value="30" class="w-full">
+            </div>
+            <div>
+                <label for="particleCount" class="slider-label block mb-2 text-sm font-medium">Cantidad</label>
+                <input id="particleCount" type="range" min="1" max="5" value="1" class="w-full">
+            </div>
+            <div>
+                <label for="gravity" class="slider-label block mb-2 text-sm font-medium">Gravedad</label>
+                <input id="gravity" type="range" min="-0.2" max="0.5" value="0.05" step="0.01" class="w-full">
+            </div>
+            <div id="lifespan-control">
+                <label for="lifespan" class="slider-label block mb-2 text-sm font-medium">Duración</label>
+                <input id="lifespan" type="range" min="20" max="200" value="60" class="w-full">
+            </div>
+             <div id="trail-control">
+                <label for="trail" class="slider-label block mb-2 text-sm font-medium">Estela</label>
+                <input id="trail" type="range" min="0.01" max="0.5" value="0.15" step="0.01" class="w-full">
+            </div>
+        </div>
+         <div class="mt-auto pt-4">
+            <p class="text-xs text-gray-500 text-center mb-2">Presiona 'H' para ocultar/mostrar</p>
+            <button id="reset-btn" class="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg transition duration-300 shadow-lg">
+                Limpiar Lienzo
+            </button>
+        </div>
+    </div>
+
+    <!-- Canvas y Video -->
+    <div class="flex-1 relative">
+        <canvas id="particle-canvas" class="absolute top-0 left-0 w-full h-full"></canvas>
+        <video id="webcam-feed" autoplay playsinline class="absolute top-0 left-0 w-1/4 h-auto opacity-20 border-2 border-gray-700 rounded-lg" style="display: none;"></video>
+        <canvas id="hidden-canvas" style="display:none;"></canvas>
+    </div>
+
+    <script>
+        // --- CONFIGURACIÓN ---
+        const canvas = document.getElementById('particle-canvas');
+        const ctx = canvas.getContext('2d');
+        const video = document.getElementById('webcam-feed');
+        const hiddenCanvas = document.getElementById('hidden-canvas');
+        const hiddenCtx = hiddenCanvas.getContext('2d');
+        const controlPanel = document.getElementById('control-panel');
+
+        const cameraButton = document.getElementById('camera-btn');
+        const generationModeSelector = document.getElementById('generationMode');
+        const calibrateControl = document.getElementById('calibrate-control');
+        const calibrateButton = document.getElementById('calibrate-btn');
+        const colorModeSelector = document.getElementById('colorMode');
+        const hueControl = document.getElementById('hue-control');
+        const hueSlider = document.getElementById('hue');
+        const particleShapeSelector = document.getElementById('particleShape');
+        const physicsModeSelector = document.getElementById('physicsMode');
+        const windControl = document.getElementById('wind-control');
+        const windForceSlider = document.getElementById('windForce');
+        const behaviorModeSelector = document.getElementById('behaviorMode');
+        const lifespanControl = document.getElementById('lifespan-control');
+        const trailControl = document.getElementById('trail-control');
+        const sensitivitySlider = document.getElementById('sensitivity');
+        const particleCountSlider = document.getElementById('particleCount');
+        const gravitySlider = document.getElementById('gravity');
+        const lifespanSlider = document.getElementById('lifespan');
+        const trailSlider = document.getElementById('trail');
+        const resetButton = document.getElementById('reset-btn');
+        const statusMessage = document.getElementById('status-message');
+        const instructions = document.getElementById('instructions');
+
+        let particles = [];
+        let isCameraActive = false;
+        let lastFrameData = null;
+        let backgroundFrameData = null;
+        let colorCycleInterval = null;
+        const ANALYSIS_WIDTH = 128;
+        let ANALYSIS_HEIGHT = 0;
+
+        // --- CLASE PARTÍCULA ---
+        class Particle {
+            constructor(x, y, color, shape) {
+                this.x = x;
+                this.y = y;
+                this.size = Math.random() * 5 + 2;
+                this.speedX = Math.random() * 2 - 1;
+                this.speedY = Math.random() * 2 - 1;
+                this.color = color;
+                this.shape = shape;
+                this.lifespan = (behaviorModeSelector.value === 'paint') ? Infinity : parseFloat(lifespanSlider.value);
+            }
+
+            update() {
+                // Aplicar físicas
+                this.speedY += parseFloat(gravitySlider.value);
+                if (physicsModeSelector.value === 'wind') {
+                    this.speedX += parseFloat(windForceSlider.value);
+                }
+
+                this.x += this.speedX;
+                this.y += this.speedY;
+
+                if (behaviorModeSelector.value === 'dynamic' && this.size > 0.2) {
+                    this.size -= 0.1;
+                }
+                this.lifespan -= 1;
+            }
+
+            draw() {
+                ctx.fillStyle = this.color;
+                ctx.beginPath();
+                switch(this.shape) {
+                    case 'square':
+                        ctx.rect(this.x - this.size / 2, this.y - this.size / 2, this.size, this.size);
+                        break;
+                    case 'triangle':
+                        ctx.moveTo(this.x, this.y - this.size / Math.sqrt(3));
+                        ctx.lineTo(this.x - this.size / 2, this.y + this.size / (2 * Math.sqrt(3)));
+                        ctx.lineTo(this.x + this.size / 2, this.y + this.size / (2 * Math.sqrt(3)));
+                        ctx.closePath();
+                        break;
+                    case 'star':
+                        this.drawStar(this.x, this.y, 5, this.size, this.size / 2);
+                        break;
+                    case 'circle':
+                    default:
+                        ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                        break;
+                }
+                ctx.fill();
+            }
+            
+            drawStar(cx, cy, spikes, outerRadius, innerRadius) {
+                let rot = Math.PI / 2 * 3;
+                let x = cx;
+                let y = cy;
+                let step = Math.PI / spikes;
+
+                ctx.moveTo(cx, cy - outerRadius);
+                for (let i = 0; i < spikes; i++) {
+                    x = cx + Math.cos(rot) * outerRadius;
+                    y = cy + Math.sin(rot) * outerRadius;
+                    ctx.lineTo(x, y);
+                    rot += step;
+
+                    x = cx + Math.cos(rot) * innerRadius;
+                    y = cy + Math.sin(rot) * innerRadius;
+                    ctx.lineTo(x, y);
+                    rot += step;
+                }
+                ctx.lineTo(cx, cy - outerRadius);
+                ctx.closePath();
+            }
+        }
+
+        // --- LÓGICA DE CÁMARA Y ANÁLISIS ---
+        async function startCamera() {
+            try {
+                statusMessage.textContent = 'Accediendo a la cámara...';
+                const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+                video.srcObject = stream;
+                video.style.display = 'block';
+                cameraButton.textContent = 'Cámara Activa';
+                cameraButton.disabled = true;
+                instructions.textContent = '¡Muévete para crear arte! Ajusta los parámetros para cambiar el efecto.';
+                statusMessage.textContent = '';
+                isCameraActive = true;
+            } catch (err) {
+                console.error("Error al acceder a la cámara:", err);
+                statusMessage.textContent = 'Error al acceder a la cámara.';
+                instructions.textContent = 'No se pudo acceder a la cámara. Refresca la página para intentarlo de nuevo.';
+            }
+        }
+
+        function processCameraFrame() {
+            if (!isCameraActive || video.readyState < 2) return;
+
+            if (ANALYSIS_HEIGHT === 0) {
+                ANALYSIS_HEIGHT = Math.floor(ANALYSIS_WIDTH * (video.videoHeight / video.videoWidth));
+                hiddenCanvas.width = ANALYSIS_WIDTH;
+                hiddenCanvas.height = ANALYSIS_HEIGHT;
+            }
+            
+            hiddenCtx.save();
+            hiddenCtx.scale(-1, 1);
+            hiddenCtx.drawImage(video, -ANALYSIS_WIDTH, 0, ANALYSIS_WIDTH, ANALYSIS_HEIGHT);
+            hiddenCtx.restore();
+
+            const currentFrame = hiddenCtx.getImageData(0, 0, ANALYSIS_WIDTH, ANALYSIS_HEIGHT);
+            const generationMode = generationModeSelector.value;
+
+            if (generationMode === 'outline' && lastFrameData) {
+                generateParticlesFromMotion(currentFrame, lastFrameData);
+            } else if (generationMode === 'fill' && backgroundFrameData) {
+                generateParticlesFromSilhouette(currentFrame, backgroundFrameData);
+            }
+            
+            lastFrameData = currentFrame;
+        }
+        
+        function generateParticles(x, y, brightness, frameData, pixelIndex) {
+            const particleCount = parseInt(particleCountSlider.value);
+            const colorMode = colorModeSelector.value;
+            const hue = hueSlider.value;
+            const shape = particleShapeSelector.value;
+            
+            let color;
+            switch (colorMode) {
+                case 'rainbow':
+                    color = `hsl(${Math.random() * 360}, 100%, 70%)`;
+                    break;
+                case 'hue':
+                    color = `hsl(${hue}, 100%, 70%)`;
+                    break;
+                case 'thermal':
+                    const thermalHue = 240 - (brightness / 255) * 240;
+                    color = `hsl(${thermalHue}, 100%, 50%)`;
+                    break;
+                case 'neon':
+                    const neonColors = ['#ff00ff', '#00ffff', '#39ff14'];
+                    color = neonColors[Math.floor(Math.random() * neonColors.length)];
+                    break;
+                case 'oceanic':
+                    const oceanicColors = ['#003366', '#006699', '#0099cc', '#33ccff', '#e0ffff'];
+                    color = oceanicColors[Math.floor(Math.random() * oceanicColors.length)];
+                    break;
+                case 'camera':
+                default:
+                    color = `rgb(${frameData.data[pixelIndex]}, ${frameData.data[pixelIndex+1]}, ${frameData.data[pixelIndex+2]})`;
+                    break;
+            }
+
+            for(let j = 0; j < particleCount; j++) {
+               particles.push(new Particle(x, y, color, shape));
+            }
+        }
+
+        function generateParticlesFromMotion(currentFrame, lastFrame) {
+            const sensitivity = parseInt(sensitivitySlider.value);
+            for (let i = 0; i < currentFrame.data.length; i += 4) {
+                const currentBrightness = (currentFrame.data[i] + currentFrame.data[i+1] + currentFrame.data[i+2]) / 3;
+                const lastBrightness = (lastFrame.data[i] + lastFrame.data[i+1] + lastFrame.data[i+2]) / 3;
+                
+                if (Math.abs(currentBrightness - lastBrightness) > sensitivity) {
+                    const pixelIndex = i / 4;
+                    const x = (pixelIndex % ANALYSIS_WIDTH) / ANALYSIS_WIDTH * canvas.width;
+                    const y = Math.floor(pixelIndex / ANALYSIS_WIDTH) / ANALYSIS_HEIGHT * canvas.height;
+                    generateParticles(x, y, currentBrightness, currentFrame, i);
+                }
+            }
+        }
+
+        function generateParticlesFromSilhouette(currentFrame, backgroundFrame) {
+            const sensitivity = parseInt(sensitivitySlider.value);
+            const numPixels = currentFrame.data.length / 4;
+            const sampleSize = Math.floor(numPixels / 4); 
+
+            for (let k = 0; k < sampleSize; k++) {
+                const i = Math.floor(Math.random() * numPixels) * 4;
+                const currentBrightness = (currentFrame.data[i] + currentFrame.data[i+1] + currentFrame.data[i+2]) / 3;
+                const backgroundBrightness = (backgroundFrame.data[i] + backgroundFrame.data[i+1] + backgroundFrame.data[i+2]) / 3;
+                
+                if (Math.abs(currentBrightness - backgroundBrightness) > sensitivity) {
+                    const pixelIndex = i / 4;
+                    const x = (pixelIndex % ANALYSIS_WIDTH) / ANALYSIS_WIDTH * canvas.width;
+                    const y = Math.floor(pixelIndex / ANALYSIS_WIDTH) / ANALYSIS_HEIGHT * canvas.height;
+                    generateParticles(x, y, currentBrightness, currentFrame, i);
+                }
+            }
+        }
+
+        // --- BUCLE PRINCIPAL Y GESTIÓN ---
+        function handleParticles() {
+            for (let i = particles.length - 1; i >= 0; i--) {
+                particles[i].update();
+                particles[i].draw();
+                if (behaviorModeSelector.value === 'dynamic' && (particles[i].lifespan <= 0 || particles[i].size <= 0.2)) {
+                    particles.splice(i, 1);
+                }
+            }
+        }
+        
+        function animate() {
+            if (behaviorModeSelector.value === 'dynamic') {
+                ctx.fillStyle = `rgba(0, 0, 0, ${trailSlider.value})`;
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+            }
+            
+            if (isCameraActive) {
+                processCameraFrame();
+            }
+            handleParticles();
+            
+            requestAnimationFrame(animate);
+        }
+
+        function resizeCanvas() {
+            const container = canvas.parentElement;
+            canvas.width = container.clientWidth;
+            canvas.height = container.clientHeight;
+        }
+
+        // --- EVENT LISTENERS ---
+        window.addEventListener('resize', resizeCanvas);
+        cameraButton.addEventListener('click', startCamera);
+        resetButton.addEventListener('click', () => {
+            particles = [];
+            ctx.fillStyle = 'black';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+        });
+
+        generationModeSelector.addEventListener('change', (e) => {
+            const isFillMode = e.target.value === 'fill';
+            calibrateControl.style.display = isFillMode ? 'block' : 'none';
+            if (isFillMode && !backgroundFrameData) {
+                instructions.textContent = 'Modo Relleno: Sal de la cámara y presiona "Calibrar Fondo".';
+            } else if (isFillMode) {
+                instructions.textContent = 'Modo Relleno: ¡Entra en el cuadro para llenar tu silueta!';
+            } else {
+                 instructions.textContent = 'Modo Contorno: ¡Muévete para crear arte!';
+            }
+        });
+
+        calibrateButton.addEventListener('click', () => {
+            if(isCameraActive) {
+                backgroundFrameData = hiddenCtx.getImageData(0, 0, ANALYSIS_WIDTH, ANALYSIS_HEIGHT);
+                statusMessage.textContent = 'Fondo calibrado.';
+                instructions.textContent = 'Modo Relleno: ¡Entra en el cuadro para llenar tu silueta!';
+                setTimeout(() => statusMessage.textContent = '', 2000);
+            } else {
+                statusMessage.textContent = 'Activa la cámara primero.';
+            }
+        });
+
+        colorModeSelector.addEventListener('change', (e) => {
+            hueControl.style.display = (e.target.value === 'hue') ? 'block' : 'none';
+            
+            if(colorCycleInterval) {
+                clearInterval(colorCycleInterval);
+                colorCycleInterval = null;
+            }
+
+            if (e.target.value === 'cycle') {
+                const cycleModes = ['rainbow', 'thermal', 'neon', 'oceanic'];
+                let currentIndex = 0;
+                
+                colorModeSelector.value = cycleModes[currentIndex];
+
+                colorCycleInterval = setInterval(() => {
+                    currentIndex = (currentIndex + 1) % cycleModes.length;
+                    const nextMode = Array.from(colorModeSelector.options).find(opt => opt.value === cycleModes[currentIndex]);
+                    if (nextMode) {
+                        colorModeSelector.value = nextMode.value;
+                    }
+                }, 5000);
+            }
+        });
+
+        physicsModeSelector.addEventListener('change', (e) => {
+            windControl.style.display = (e.target.value === 'wind') ? 'block' : 'none';
+        });
+
+        behaviorModeSelector.addEventListener('change', (e) => {
+            const isPaintMode = e.target.value === 'paint';
+            lifespanControl.style.display = isPaintMode ? 'none' : 'block';
+            trailControl.style.display = isPaintMode ? 'none' : 'block';
+            if (isPaintMode) {
+                instructions.textContent = 'Modo Pintura: Las partículas son permanentes. ¡Dibuja con tu movimiento!';
+            } else {
+                instructions.textContent = 'Modo Dinámico: Las partículas desaparecen con el tiempo.';
+            }
+        });
+        
+        canvas.addEventListener('click', (e) => {
+            if (physicsModeSelector.value !== 'explosion') return;
+
+            const rect = canvas.getBoundingClientRect();
+            const clickX = e.clientX - rect.left;
+            const clickY = e.clientY - rect.top;
+            const explosionStrength = 15;
+
+            particles.forEach(p => {
+                const dx = p.x - clickX;
+                const dy = p.y - clickY;
+                const distance = Math.sqrt(dx * dx + dy * dy) || 1;
+                const forceX = (dx / distance) * explosionStrength;
+                const forceY = (dy / distance) * explosionStrength;
+                p.speedX += forceX;
+                p.speedY += forceY;
+            });
+        });
+
+        window.addEventListener('keydown', (e) => {
+            if (e.key.toLowerCase() === 'h') {
+                controlPanel.classList.toggle('hidden');
+            }
+        });
+
+        // --- INICIALIZACIÓN ---
+        resizeCanvas();
+        animate();
+    </script>
+</body>
+</html>
